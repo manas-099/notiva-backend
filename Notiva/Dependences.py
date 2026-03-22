@@ -16,7 +16,7 @@ from typing import AsyncGenerator
 import asyncpg
 import structlog
 
-from .Note_taker import AsyncNoteTaker
+from Note_taker import AsyncNoteTaker
 
 log = structlog.get_logger(__name__)
 

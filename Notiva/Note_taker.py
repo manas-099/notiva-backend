@@ -20,9 +20,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from .Meetingdb import MeetingDB, ActionItem, KeyPoint, MeetingDBError
-from .Meeting_llm import MeetingLLM, SegmentOutput, LLMError
-from .dashboard import print_segment, print_info, print_status
+from Meetingdb import MeetingDB, ActionItem, KeyPoint, MeetingDBError
+from Meeting_llm import MeetingLLM, SegmentOutput, LLMError
+from dashboard import print_segment, print_info, print_status
 
 log = structlog.get_logger(__name__)
 
