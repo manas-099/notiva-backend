@@ -1,0 +1,48 @@
+uv init --package Notiva
+
+
+🎤 Mic / System Audio
+        ↓
+🎧 Audio Capture (Python / Node)
+        ↓
+🔌 WebSocket → Sarvam Streaming API
+        ↓
+📝 Real-time transcript (token stream)
+        ↓
+🤖 LLM (summary / notes / actions)
+        ↓
+💻 UI (like VS Code sidebar / overlay)
+
+
+your_project/
+│
+├── main.py               ← FastAPI entry point. Calls configure_logging() on startup.
+├── logging_config.py     ← configure_logging() lives here. Imported by main.py AND stt.py.
+├── dependencies.py       ← SSEManager, NoteRegistry, AppState, Depends() providers
+├── requirements.txt
+├── .env
+│
+├── meetingdb.py          ← DB layer.      Only: log = structlog.get_logger(__name__)
+├── meeting_llm.py        ← LLM layer.     Only: log = structlog.get_logger(__name__)
+├── note_taker.py         ← Agent core.    Only: log = structlog.get_logger(__name__)
+├── stt.py                ← CLI runner.    Calls configure_logging() then get_logger()
+│
+└── routes/
+    ├── __init__.py
+    └── meetings.py       ← All 6 FastAPI endpoints
+
+To run locally:
+    uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Railway start command:**
+```
+uvicorn main:app --host 0.0.0.0 --port $PORT
+
+
+
+
+
+
+C:\Users\manas\OneDrive\Desktop>uvicorn ai_note_taker.Notiva.main:app --reload --host 0.0.0.0 --po
+rt 8000

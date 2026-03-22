@@ -1,0 +1,10 @@
+
+.env
+__pycache__/
+*.pyc
+.venv/
+.python-version
+*.egg-info/
+dist/
+stt.py
+test_app.html
