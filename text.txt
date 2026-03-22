@@ -46,3 +46,16 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 
 C:\Users\manas\OneDrive\Desktop>uvicorn ai_note_taker.Notiva.main:app --reload --host 0.0.0.0 --po
 rt 8000
+
+
+
+
+
+
+
+
+
+LOG_LEVEL      = INFO        → how much logging to show
+LOG_FORMAT     = json        → Railway reads logs in JSON format  
+ALLOWED_ORIGINS = *          → allows Electron app to call the API
+DATABASE_URL   = (Postgres)  → connects to your Railway database

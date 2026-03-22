@@ -46,12 +46,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 # ── Configure logging FIRST — before any other import that uses structlog ─────
-from .logging_config import configure_logging
+from logging_config import configure_logging
 configure_logging()
 
-from .Dependences import get_app_state
-from .Meetingdb import MeetingDBError, create_pool, run_migrations
-from .routes.meetings import router as meetings_router
+from Dependences import get_app_state
+from Meetingdb import MeetingDBError, create_pool, run_migrations
+from routes.meetings import router as meetings_router
 
 log = structlog.get_logger(__name__)
 
