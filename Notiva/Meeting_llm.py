@@ -8,8 +8,8 @@ Changes vs original:
   - _parse_json never silently swallows — logs warning and returns fallback
   - Retry logic (up to 2 retries) on transient model errors
   - API key not logged (redacted)
+  - Model initialized lazily (not at module level) to avoid startup crash
 """
-
 
 import asyncio
 import json
@@ -21,25 +21,21 @@ from pydantic import BaseModel, ValidationError
 
 from langchain_openrouter import ChatOpenRouter
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-os.environ["OPENROUTER_API_KEY"] = os.environ.get(
-    "OPENROUTER_API_KEY",
-    "",
-)
 
 log = structlog.get_logger(__name__)
 
 MODEL_NAME   = "arcee-ai/trinity-large-preview:free"
 MAX_RETRIES  = 2
-RETRY_DELAY  = 2.0  # seconds between retries
+RETRY_DELAY  = 2.0
 
-model = ChatOpenRouter(
-    model=MODEL_NAME,
-    temperature=0.8,
-)
+
+def _get_model(api_key: str = "") -> ChatOpenRouter:
+    key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+    os.environ["OPENROUTER_API_KEY"] = key
+    return ChatOpenRouter(
+        model=MODEL_NAME,
+        temperature=0.8,
+    )
 
 
 # ── Custom exceptions ──────────────────────────────────────────────────────────
@@ -62,7 +58,7 @@ class ActionItem(BaseModel):
 
 class KeyPoint(BaseModel):
     point: str
-    category: str  # number | name | date | fact | risk | blocker
+    category: str
 
 
 class DisplayNotes(BaseModel):
@@ -176,13 +172,7 @@ Produce final meeting notes. Deduplicate everything. Respond with this exact JSO
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _parse_json(raw: str, context: str = "") -> dict[str, Any]:
-    """
-    Strip markdown fences and parse JSON.
-    Logs a warning on parse failure and returns a minimal fallback dict.
-    Never raises — callers handle fallback validation via Pydantic.
-    """
     cleaned = raw.strip()
-    # strip ```json ... ``` or ``` ... ```
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
         cleaned = "\n".join(lines[1:] if lines[0].startswith("```") else lines)
@@ -216,21 +206,16 @@ def _bullets(items: list[str]) -> str:
     return "\n".join(f"- {i}" for i in items) or "None"
 
 
-def _invoke_with_retry(prompt: str, call_label: str) -> str:
-    """
-    Invoke the model synchronously with retry logic.
-    Returns raw response content string.
-    Raises LLMError after MAX_RETRIES exhausted.
-    """
+def _invoke_with_retry(prompt: str, call_label: str, api_key: str = "") -> str:
+    model = _get_model(api_key)
     logger = log.bind(call_label=call_label, model=MODEL_NAME)
     last_exc: Exception | None = None
 
-    for attempt in range(1, MAX_RETRIES + 2):  # +2 → attempts: 1, 2, 3
+    for attempt in range(1, MAX_RETRIES + 2):
         try:
             t0 = time.monotonic()
             response = model.invoke(prompt)
             elapsed = round(time.monotonic() - t0, 2)
-
             content = response.content
             logger.info(
                 "llm.call_success",
@@ -249,7 +234,7 @@ def _invoke_with_retry(prompt: str, call_label: str) -> str:
                 error=str(exc),
             )
             if attempt <= MAX_RETRIES:
-                time.sleep(RETRY_DELAY * attempt)  # exponential back-off
+                time.sleep(RETRY_DELAY * attempt)
 
     logger.error("llm.all_retries_exhausted", error=str(last_exc))
     raise LLMError(f"LLM call '{call_label}' failed after {MAX_RETRIES + 1} attempts: {last_exc}") from last_exc
@@ -258,11 +243,8 @@ def _invoke_with_retry(prompt: str, call_label: str) -> str:
 # ── MeetingLLM ─────────────────────────────────────────────────────────────────
 
 class MeetingLLM:
-    """
-    Sync LLM wrapper — called via run_in_executor from async note_taker.
-    """
-
-    # ── call_segment ───────────────────────────────────────────────────────────
+    def __init__(self, api_key: str = ""):
+        self.api_key = api_key
 
     def call_segment(self, chunk: str, prev_summary: str) -> SegmentOutput:
         logger = log.bind(
@@ -279,7 +261,7 @@ class MeetingLLM:
         )
         prompt = f"{_SYSTEM}\n\n{_SEGMENT_TEMPLATE.format(context=context, chunk=chunk.strip())}"
 
-        raw = _invoke_with_retry(prompt, call_label="segment")
+        raw = _invoke_with_retry(prompt, call_label="segment", api_key=self.api_key)
         data = _parse_json(raw, context="call_segment")
 
         try:
@@ -303,8 +285,6 @@ class MeetingLLM:
         except (ValidationError, TypeError, KeyError) as exc:
             logger.error("llm.segment_schema_error", error=str(exc), data_keys=list(data.keys()))
             raise LLMParseError(f"SegmentOutput validation failed: {exc}") from exc
-
-    # ── call_final ─────────────────────────────────────────────────────────────
 
     def call_final(
         self,
@@ -333,7 +313,7 @@ class MeetingLLM:
             ) or 'None',
         )}"
 
-        raw = _invoke_with_retry(prompt, call_label="final")
+        raw = _invoke_with_retry(prompt, call_label="final", api_key=self.api_key)
         data = _parse_json(raw, context="call_final")
 
         try:
@@ -361,13 +341,9 @@ class MeetingLLM:
             raise LLMParseError(f"FinalOutput validation failed: {exc}") from exc
 
 
-# ── Async wrapper (backwards compat) ───────────────────────────────────────────
+# ── Async wrapper ──────────────────────────────────────────────────────────────
 
-async def llm_call(chunk: str, prev_summary: str) -> dict:
-    """
-    Legacy async interface — returns raw dict (not Pydantic).
-    Only use if something still imports this directly.
-    """
+async def llm_call(chunk: str, prev_summary: str, api_key: str = "") -> dict:
     context = (
         f"Meeting so far:\n{prev_summary}"
         if prev_summary
@@ -377,6 +353,7 @@ async def llm_call(chunk: str, prev_summary: str) -> dict:
 
     loop = asyncio.get_running_loop()
     try:
+        model = _get_model(api_key)
         response = await loop.run_in_executor(None, model.invoke, prompt)
         return _parse_json(response.content, context="llm_call_legacy")
     except Exception as exc:
