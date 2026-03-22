@@ -2,10 +2,8 @@ import asyncio
 import base64
 import json
 import os
-import time
 from uuid import uuid4
 
-import asyncpg
 import structlog
 from fastapi import (
     APIRouter, Depends, HTTPException, Request,
@@ -14,7 +12,6 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 
-# ✅ FIXED IMPORTS (FLAT)
 from Dependences import NoteRegistry, SSEManager, get_pool, get_registry, get_sse_manager
 from Meetingdb import MeetingDBError
 from Note_taker import NoteTakerError, create_note_taker
@@ -24,17 +21,18 @@ router = APIRouter(prefix="/meetings", tags=["meetings"])
 
 SAMPLE_RATE = 16_000
 
-# ── Per-meeting audio mixer ─────────────────────────────────────────
+# ── Per-meeting storage ────────────────────────────────────────────
 _audio_sessions: dict[str, asyncio.Queue] = {}
+_meeting_keys: dict[str, dict] = {}   # ✅ NEW
 
 
-# ── Schemas ─────────────────────────────────────────────────────────
+# ── Schemas ───────────────────────────────────────────────────────
 
 class StartMeetingRequest(BaseModel):
-    user_id:            str
-    attendee_emails:    list[str]
-    openrouter_api_key: str | None = None   # ✅ ADDED
-    sarvam_api_key:     str | None = None   # ✅ ADDED
+    user_id: str
+    attendee_emails: list[str]
+    openrouter_api_key: str | None = None
+    sarvam_api_key: str | None = None
 
     @field_validator("attendee_emails")
     @classmethod
@@ -58,28 +56,7 @@ class EndMeetingResponse(BaseModel):
     duration_secs: int
 
 
-# ── Health ─────────────────────────────────────────────────────────
-
-@router.get("/health")
-async def health(pool=Depends(get_pool), registry: NoteRegistry = Depends(get_registry)):
-    try:
-        async with pool.acquire() as conn:
-            await conn.fetchval("SELECT 1")
-        db_ok = True
-    except Exception as exc:
-        log.error("health.db_failed", error=str(exc))
-        db_ok = False
-
-    key = os.environ.get("SARVAM_API_KEY", "")
-    return {
-        "status": "ok" if db_ok else "degraded",
-        "db": "ok" if db_ok else "error",
-        "active_meetings": len(registry.active_meetings()),
-        "sarvam_key_set": bool(key),
-    }
-
-
-# ── START MEETING ───────────────────────────────────────────────────
+# ── START MEETING ─────────────────────────────────────────────────
 
 @router.post("/start", response_model=StartMeetingResponse, status_code=201)
 async def start_meeting(
@@ -91,19 +68,23 @@ async def start_meeting(
 ):
     meeting_id = str(uuid4())
 
-    # ✅ Resolve API keys
+    # ✅ Resolve keys (UI > env fallback)
     openrouter_key = body.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY", "")
     sarvam_key     = body.sarvam_api_key     or os.environ.get("SARVAM_API_KEY", "")
 
-    if sarvam_key:
-        os.environ["SARVAM_API_KEY"] = sarvam_key
+    if not openrouter_key:
+        raise HTTPException(status_code=400, detail="OpenRouter API key required")
+
+    # ✅ Store per meeting (IMPORTANT)
+    _meeting_keys[meeting_id] = {
+        "openrouter": openrouter_key,
+        "sarvam": sarvam_key,
+    }
 
     log.info(
         "api.start_meeting",
         meeting_id=meeting_id,
-        user_id=body.user_id,
-        attendee_count=len(body.attendee_emails),
-        has_openrouter_key=bool(openrouter_key),
+        has_openrouter_key=True,
         has_sarvam_key=bool(sarvam_key),
     )
 
@@ -113,12 +94,12 @@ async def start_meeting(
             user_id=body.user_id,
             attendee_emails=body.attendee_emails,
             pool=pool,
-            openrouter_api_key=openrouter_key,  # ✅ FIXED
+            openrouter_api_key=openrouter_key,
         )
     except NoteTakerError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    # SSE push hook
+    # SSE hook
     original_push = note_taker._push_to_ui
 
     def patched_push(index, result):
@@ -135,10 +116,9 @@ async def start_meeting(
     registry.register(note_taker)
     asyncio.create_task(note_taker.run_trigger_loop())
 
-    # Audio queue
     _audio_sessions[meeting_id] = asyncio.Queue(maxsize=500)
 
-    # Start STT consumer
+    # ✅ Pass meeting_id (NOT env)
     asyncio.create_task(_sarvam_consumer(meeting_id, note_taker))
 
     base_url = str(request.base_url).rstrip("/")
@@ -152,18 +132,20 @@ async def start_meeting(
     )
 
 
-# ── SARVAM CONSUMER ────────────────────────────────────────────────
+# ── SARVAM CONSUMER ──────────────────────────────────────────────
 
 async def _sarvam_consumer(meeting_id: str, note_taker):
-    key = os.environ.get("SARVAM_API_KEY", "")
+    keys = _meeting_keys.get(meeting_id, {})
+    sarvam_key = keys.get("sarvam")
     queue = _audio_sessions.get(meeting_id)
 
-    if not key or not queue:
+    if not sarvam_key or not queue:
+        log.info("sarvam.disabled", meeting_id=meeting_id)
         return
 
     from sarvamai import AsyncSarvamAI
 
-    client = AsyncSarvamAI(api_subscription_key=key)
+    client = AsyncSarvamAI(api_subscription_key=sarvam_key)
 
     async with client.speech_to_text_streaming.connect(
         model="saaras:v3",
@@ -194,7 +176,7 @@ async def _sarvam_consumer(meeting_id: str, note_taker):
         await asyncio.gather(send_audio(), recv())
 
 
-# ── WEBSOCKET AUDIO ────────────────────────────────────────────────
+# ── WEBSOCKET AUDIO ──────────────────────────────────────────────
 
 @router.websocket("/{meeting_id}/audio")
 async def audio_websocket(
@@ -222,7 +204,7 @@ async def audio_websocket(
         pass
 
 
-# ── END MEETING ────────────────────────────────────────────────────
+# ── END MEETING ──────────────────────────────────────────────────
 
 @router.post("/{meeting_id}/end", response_model=EndMeetingResponse)
 async def end_meeting(
@@ -242,6 +224,7 @@ async def end_meeting(
     final = await note_taker.end_meeting()
 
     registry.remove(meeting_id)
+    _meeting_keys.pop(meeting_id, None)   # ✅ CLEANUP
     await sse_manager.push_done(meeting_id)
 
     return EndMeetingResponse(
@@ -252,7 +235,7 @@ async def end_meeting(
     )
 
 
-# ── SSE STREAM ─────────────────────────────────────────────────────
+# ── SSE STREAM ───────────────────────────────────────────────────
 
 @router.get("/{meeting_id}/stream")
 async def stream_notes(meeting_id: str, sse_manager: SSEManager = Depends(get_sse_manager)):

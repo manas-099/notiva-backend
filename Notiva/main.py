@@ -73,8 +73,9 @@ async def lifespan(app: FastAPI):
     missing = [v for v in ["DATABASE_URL", "SARVAM_API_KEY", "OPENROUTER_API_KEY"]
                if not os.environ.get(v)]
     if missing:
-        log.error("app.missing_env_vars", missing=missing)
-        raise RuntimeError(f"Missing required env vars: {missing}")
+        # log.error("app.missing_env_vars", missing=missing)
+        # raise RuntimeError(f"Missing required env vars: {missing}")
+        log.info("App started — API keys will be provided dynamically via UI")
 
     # Create DB pool + run migrations
     try:
