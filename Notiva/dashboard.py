@@ -1,19 +1,7 @@
 """
 dashboard.py — Live terminal dashboard for Meeting Notes AI
-─────────────────────────────────────────────────────────────
-Replaces the plain print() in note_taker._push_to_ui() and
-stt.py's final notes block with a beautiful Rich terminal UI.
 
-Shows in real time:
-  - Meeting status bar (recording / duration / segments)
-  - Each segment as it arrives: headline, summary, bullet notes, highlight pills
-  - Final notes panel when meeting ends
 
-Usage:
-  Import and use Dashboard in stt.py instead of the plain prints.
-  Works on Windows, Mac, Linux — Rich handles all terminal differences.
-
-Install:  pip install rich
 """
 
 import time

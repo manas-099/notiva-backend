@@ -1,33 +1,6 @@
 """
 main.py — FastAPI application entry point
-──────────────────────────────────────────
-Project layout expected:
-  your_project/
-  ├── main.py              ← this file
-  ├── logging_config.py
-  ├── dependencies.py
-  ├── meetingdb.py
-  ├── meeting_llm.py
-  ├── note_taker.py
-  ├── stt.py               (standalone CLI runner — not imported here)
-  └── routes/
-      ├── __init__.py
-      └── meetings.py
 
-Run locally:
-  uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-Deploy on Railway:
-  Set start command → uvicorn main:app --host 0.0.0.0 --port $PORT
-  Env vars needed:
-    DATABASE_URL
-    SARVAM_API_KEY
-    OPENROUTER_API_KEY
-    SENDGRID_API_KEY
-    FROM_EMAIL
-    LOG_FORMAT=json          (Railway log aggregation)
-    LOG_LEVEL=INFO
-    ALLOWED_ORIGINS=https://your-electron-app.local
 """
 
 import os

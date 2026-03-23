@@ -249,3 +249,12 @@ async def stream_notes(meeting_id: str, sse_manager: SSEManager = Depends(get_ss
                 break
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+@router.get("/health")
+async def health(
+    registry: NoteRegistry = Depends(get_registry),
+):
+    return {
+        "status": "ok",
+        "active_meetings": len(registry.active_meetings()),
+    }

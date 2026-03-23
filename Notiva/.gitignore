@@ -8,3 +8,4 @@ __pycache__/
 dist/
 stt.py
 test_app.html
+text.txt

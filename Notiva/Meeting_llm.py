@@ -24,6 +24,12 @@ import os
 
 log = structlog.get_logger(__name__)
 
+
+
+# from dotenv import load_dotenv
+# load_dotenv()
+# print("KEY:", os.environ.get("OPENROUTER_API_KEY", "NOT FOUND"))
+
 MODEL_NAME   = "arcee-ai/trinity-large-preview:free"
 MAX_RETRIES  = 2
 RETRY_DELAY  = 2.0

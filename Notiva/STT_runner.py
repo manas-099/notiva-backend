@@ -1,17 +1,6 @@
 """
 stt.py — Sarvam STT + AsyncNoteTaker  (CLI / standalone runner)
-────────────────────────────────────────────────────────────────
-Use this file to run the note-taker from the command line WITHOUT
-the FastAPI server (e.g. local testing with a real microphone).
 
-When deployed on Railway the FastAPI server (main.py) owns the process
-and this file is NOT imported — the WebSocket endpoint in
-routes/meetings.py handles audio instead.
-
-Logging rule:
-  configure_logging() is called ONCE here (the entry point).
-  meetingdb, meeting_llm, note_taker never call configure_logging() —
-  they only do `log = structlog.get_logger(__name__)`.
 """
 
 import asyncio
@@ -26,16 +15,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Logging: configured HERE and nowhere else ─────────────────────────────────
-from .logging_config import configure_logging
+from logging_config import configure_logging
 configure_logging()          # reads LOG_LEVEL + LOG_FORMAT from env
 # ─────────────────────────────────────────────────────────────────────────────
 
 import sounddevice as sd
 from sarvamai import AsyncSarvamAI
 
-from .Note_taker import create_note_taker, NoteTakerError
-from .Meetingdb import create_pool, run_migrations, MeetingDBError
-from .dashboard import (
+from Note_taker import create_note_taker, NoteTakerError
+from Meetingdb import create_pool, run_migrations, MeetingDBError
+from dashboard import (
     print_meeting_start,
     print_final_notes,
     print_error,

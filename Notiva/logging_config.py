@@ -1,18 +1,6 @@
 """
 logging_config.py — Centralized structlog configuration
-────────────────────────────────────────────────────────
-Import and call configure_logging() ONCE at app startup (in main.py).
-All other modules just do: log = structlog.get_logger(__name__)
 
-Supports two output modes via LOG_FORMAT env var:
-  LOG_FORMAT=console  (default) → coloured human-readable output
-  LOG_FORMAT=json               → JSON lines (for Railway / log aggregators)
-
-Fix:
-  structlog.stdlib.add_logger_name needs a stdlib logger (.name attribute).
-  PrintLoggerFactory() does NOT provide one → AttributeError at runtime.
-  Use structlog.stdlib.LoggerFactory() instead — wraps real stdlib loggers.
-  Also: logging.basicConfig() must run BEFORE structlog.configure().
 """
 
 import logging

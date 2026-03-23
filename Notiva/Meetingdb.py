@@ -1,14 +1,6 @@
 """
 meetingdb.py — Meeting Notes DB with structured logging + error handling
-─────────────────────────────────────────────────────────────────────────
-Changes vs original:
-  - structlog added throughout (replaces all print())
-  - Every public method has try/except with contextual log fields
-  - DB errors raise MeetingDBError (never swallowed silently)
-  - load_last_segment trailing-comma SQL bug fixed
-  - save_segment result.display_notes.summary_line bug fixed
-    (SegmentOutput has no display_notes in DB layer — uses result.rolling_summary)
-  - asyncpg.Pool type hints tightened
+
 """
 
 import json
