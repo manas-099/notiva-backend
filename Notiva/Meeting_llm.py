@@ -1,14 +1,6 @@
 """
 meeting_llm.py — LLM layer with structured logging + error handling
-────────────────────────────────────────────────────────────────────
-Changes vs original:
-  - structlog added throughout
-  - LLMError raised on parse failures / model errors
-  - call_segment / call_final log token estimates, latency, parse errors
-  - _parse_json never silently swallows — logs warning and returns fallback
-  - Retry logic (up to 2 retries) on transient model errors
-  - API key not logged (redacted)
-  - Model initialized lazily (not at module level) to avoid startup crash
+
 """
 
 import asyncio
