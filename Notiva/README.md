@@ -116,8 +116,11 @@ Swagger docs at `http://localhost:8000/docs`
 | `LOG_LEVEL` | `INFO` | -->
 
 ### 6. Run this on terminal itself using STT_runner.py
+```
 cd Notiva
+
 python -m STT_runner 
+```
 ### Start Command
 
 
